@@ -2,29 +2,24 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Copy manifests first for caching
+# 1) Copy manifests and install deps WITHOUT lifecycle scripts
 COPY package*.json ./
-
-# Install deps without running prepare/postinstall scripts yet
 RUN if [ -f package-lock.json ]; then npm ci --ignore-scripts; else npm install --ignore-scripts; fi
 
-# Copy the rest of the source
+# 2) Copy full source
 COPY . .
 
-# Create a stub git-commit-info.ts so prepare/bundle steps won't choke
-# ⚠️ Adjust path if your repo expects it somewhere else
+# 3) Stub the generated git info (since .git isn't in the build context)
 RUN mkdir -p packages/cli/src/generated \
  && printf "export default { commit: 'unknown', branch: 'unknown' };\n" > packages/cli/src/generated/git-commit-info.ts
 
-# Now run your prepare/build steps (they can see scripts/, configs, etc.)
+# 4) Run ONLY "prepare" to bundle the CLI; skip any global "build" that drags UI/tests
 RUN npm run -s prepare || true
-RUN npm run build --workspaces --if-present || npm run build --if-present || true
 
-# Railway networking
+# Networking for Railway
 ENV HOST=0.0.0.0
 ENV PORT=8080
 EXPOSE 8080
 
-# Start via package.json script
+# Start via your package.json ("start": "node scripts/start.js")
 CMD ["npm", "start"]
-
