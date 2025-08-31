@@ -2,49 +2,35 @@
 FROM node:20-slim AS builder
 WORKDIR /app
 
-# Enable pnpm (switch to npm version below if you don't use pnpm)
-RUN corepack enable && corepack prepare pnpm@9.7.0 --activate
-
-# Copy the whole repo so we don't guess folder names
-# (keeps cache OK because pnpm respects lockfile)
+# Copy everything (keeps things simple for monorepos or single packages)
 COPY . .
 
-# If your repo doesn't have pnpm-lock.yaml, comment this and the next pnpm lines,
-# and use the npm variant below.
-RUN test -f pnpm-lock.yaml && echo "Found pnpm-lock.yaml" || (echo "No pnpm-lock.yaml; see npm variant in Dockerfile comments" && exit 1)
+# Install deps (uses CI if package-lock.json exists)
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
-# Install dependencies for all workspaces
-RUN pnpm install --frozen-lockfile
+# Build (works with or without workspaces; no-op if absent)
+RUN npm run build --workspaces --if-present || npm run build --if-present || true
 
-# Build everything (workspace-root script)
-RUN pnpm -w build
-
-# Pack all workspaces to .tgz in one place
-# This packs every workspace; if you only want some, add --filter flags.
-RUN mkdir -p /tmp/packs && pnpm -r pack --pack-destination /tmp/packs
+# Pack all workspaces (or the root) to .tgz files for optional global installs
+RUN mkdir -p /tmp/packs \
+ && (npm -ws --silent pack --pack-destination /tmp/packs || true) \
+ && (npm pack --pack-destination /tmp/packs || true)
 
 # ---------- runtime stage ----------
 FROM node:20-slim
 WORKDIR /srv
 
-# Install the packed workspaces globally (CLIs become available on PATH)
+# Optional: install any packed CLIs globally so their bins are on PATH
 COPY --from=builder /tmp/packs/*.tgz /usr/local/share/npm-global/
-RUN npm install -g /usr/local/share/npm-global/*.tgz
+RUN sh -lc 'ls /usr/local/share/npm-global/*.tgz >/dev/null 2>&1 && npm i -g /usr/local/share/npm-global/*.tgz || true'
 
-# Copy your runtime app (if you have non-CLI server files)
+# App source (if your server runs from the repo)
 COPY . .
 
-# Make sure your app respects Railway's PORT
+# Railway port + binding
+ENV HOST=0.0.0.0
 ENV PORT=8080
 EXPOSE 8080
 
-# ---- Choose one start command that matches your project ----
-# If your MCP server is a CLI (example):
-# CMD ["gemini-cli", "serve", "--port", "${PORT}"]
-
-# If you have a Node server file:
-# CMD ["node", "apps/server/index.js"]
-
-# If package.json has a script like "start:server":
-# CMD ["pnpm", "start:server"]
-
+# Start via your package.json "start" script
+CMD ["npm", "start"]
