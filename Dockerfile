@@ -2,16 +2,16 @@
 FROM node:20-slim AS builder
 WORKDIR /app
 
-# Copy everything (keeps things simple for monorepos or single packages)
+# Copy repo
 COPY . .
 
-# Install deps (uses CI if package-lock.json exists)
+# Install deps
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
-# Build (works with or without workspaces; no-op if absent)
+# Build (no-op if you don’t have a build script)
 RUN npm run build --workspaces --if-present || npm run build --if-present || true
 
-# Pack all workspaces (or the root) to .tgz files for optional global installs
+# (Optional) Pack any workspaces/root for global CLIs
 RUN mkdir -p /tmp/packs \
  && (npm -ws --silent pack --pack-destination /tmp/packs || true) \
  && (npm pack --pack-destination /tmp/packs || true)
@@ -20,17 +20,17 @@ RUN mkdir -p /tmp/packs \
 FROM node:20-slim
 WORKDIR /srv
 
-# Optional: install any packed CLIs globally so their bins are on PATH
+# (Optional) install packed CLIs globally
 COPY --from=builder /tmp/packs/*.tgz /usr/local/share/npm-global/
 RUN sh -lc 'ls /usr/local/share/npm-global/*.tgz >/dev/null 2>&1 && npm i -g /usr/local/share/npm-global/*.tgz || true'
 
-# App source (if your server runs from the repo)
+# Copy app source for runtime
 COPY . .
 
-# Railway port + binding
+# Railway networking
 ENV HOST=0.0.0.0
 ENV PORT=8080
 EXPOSE 8080
 
-# Start via your package.json "start" script
+# Start your server via package.json
 CMD ["npm", "start"]
