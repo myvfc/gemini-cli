@@ -1,27 +1,19 @@
-FROM node:20-slim
+SyntaxError: Unexpected end of input
+    at compileSourceTextModule (node:internal/modules/esm/utils:346:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:146:18)
+    at #translate (node:internal/modules/esm/loader:431:12)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:478:27)
+    at async ModuleJob._link (node:internal/modules/esm/module_job:110:19)
 
-WORKDIR /app
+message:
+""
 
-# 1) Copy only manifests first for caching
-COPY package*.json ./
+attributes:
+{⋯}
 
-# 2) Install deps WITHOUT running lifecycle scripts (prepare/postinstall/etc.)
-RUN if [ -f package-lock.json ]; then npm ci --ignore-scripts; else npm install --ignore-scripts; fi
+tags:
+{⋯}
 
-# 3) Now copy the rest of the source (includes scripts/, configs, etc.)
-COPY . .
-
-# 4) Manually run the scripts you skipped, now that files exist
-#    - prepare (if defined) builds your CLI bundles, etc.
-#    - build is optional; --if-present makes it a no-op if missing
-RUN npm run -s prepare || true
-RUN npm run build --workspaces --if-present || npm run build --if-present || true
-
-# Railway networking
-ENV HOST=0.0.0.0
-ENV PORT=8080
-EXPOSE 8080
-
-# Start via package.json
-CMD ["npm", "start"]
-
+timestamp:
+"2025-08-31T21:19:45.000240159Z"
+Node.js v20.19.4
