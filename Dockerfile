@@ -17,7 +17,7 @@ RUN npm run -w @google/gemini-cli build || true
 
 # Railway networking
 ENV HOST=0.0.0.0
-ENV PORT=8080
+
 EXPOSE 8080
 
 # Start the CLI in server mode on Railway's dynamic port.
