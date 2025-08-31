@@ -1,24 +1,26 @@
 FROM node:20-slim
-
 WORKDIR /app
 
-# Copy the whole repo first so npm sees workspaces
+# Copy the whole repo so npm can see all workspaces
 COPY . .
 
-# Install ALL workspace deps (and root), but skip lifecycle scripts for now
+# Install all deps for root + workspaces, but skip lifecycle scripts for now
 RUN npm install --workspaces --include-workspace-root --ignore-scripts
 
-# Stub the generated git info since .git isn't in the build context
+# Stub git info (build runs without .git)
 RUN mkdir -p packages/cli/src/generated \
  && printf "export default { commit: 'unknown', branch: 'unknown' };\n" > packages/cli/src/generated/git-commit-info.ts
 
-# Now run only the CLI bundling step; skip broad "build" to avoid UI/tests
+# Build only what's needed:
+# - prepare bundles the CLI (no UI/tests)
+# - build the a2a server workspace if it has a build step
 RUN npm run -s prepare || true
+RUN npm run -w @google/gemini-cli-a2a-server build || true
 
 # Railway networking
 ENV HOST=0.0.0.0
 ENV PORT=8080
 EXPOSE 8080
 
-# Start via package.json ("start": "node scripts/start.js")
-CMD ["npm", "start"]
+# We’ll set the Start Command in Railway (below)
+CMD ["node", "-e", "console.log('Set Start Command in Railway to run the a2a server…')"]
