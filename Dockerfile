@@ -2,16 +2,19 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Copy manifests first for better cache
+# 1) Copy only manifests first for caching
 COPY package*.json ./
 
-# Install dependencies (supports workspaces if your root has "workspaces")
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+# 2) Install deps WITHOUT running lifecycle scripts (prepare/postinstall/etc.)
+RUN if [ -f package-lock.json ]; then npm ci --ignore-scripts; else npm install --ignore-scripts; fi
 
-# Copy the rest of the source
+# 3) Now copy the rest of the source (includes scripts/, configs, etc.)
 COPY . .
 
-# Build if you have a build script (TS/monorepo). No-op if absent.
+# 4) Manually run the scripts you skipped, now that files exist
+#    - prepare (if defined) builds your CLI bundles, etc.
+#    - build is optional; --if-present makes it a no-op if missing
+RUN npm run -s prepare || true
 RUN npm run build --workspaces --if-present || npm run build --if-present || true
 
 # Railway networking
@@ -19,5 +22,6 @@ ENV HOST=0.0.0.0
 ENV PORT=8080
 EXPOSE 8080
 
-# Start via package.json "start" -> node scripts/start.js
+# Start via package.json
 CMD ["npm", "start"]
+
